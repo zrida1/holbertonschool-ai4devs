@@ -2,7 +2,7 @@
 
 ## Summary
 
-This pull request introduces a task filtering feature that allows users to find tasks based on status, priority, deadline, and title keywords.
+This pull request introduces a Task Filtering Feature that allows users to find tasks based on status, priority, deadline, and title keywords.
 
 The feature supports combining multiple filters to make task management easier and more efficient.
 
@@ -25,9 +25,31 @@ Users may have many tasks with different priorities, statuses, and deadlines. Fi
 
 This feature improves usability by allowing users to quickly find relevant tasks using multiple filtering criteria.
 
+## Implementation Details
+
+- Programming Language: Java 17+
+- Testing Framework: JUnit 5
+- Java Streams API used for filtering.
+- Used Java Records to represent task and filter data.
+- Implemented reusable filtering methods.
+- No external database or API integration is required.
+
+## LOC Evidence
+
+The feature implementation consists of three Java source files:
+
+1. `Task.java` – Task data model and validation.
+2. `TaskFilter.java` – Filtering criteria and validation.
+3. `TaskFilterService.java` – Filtering logic using Java Streams.
+
+The target implementation size is **100–200 lines of code (LOC)**, excluding unit tests.
+
+The implementation LOC should be verified using the source files.
+
 ## Testing
 
-Unit tests cover:
+Added 9 JUnit 5 unit tests covering:
+
 - Empty filters.
 - Status filtering.
 - Priority filtering.
@@ -38,17 +60,10 @@ Unit tests cover:
 - Invalid date ranges.
 - Invalid task data.
 
-Run tests using:
+Tests can be executed using:
 
 `mvn test`
 
-## Implementation Details
-
-- Language: Java 17+
-- Testing Framework: JUnit 5
-- Java Streams API used for filtering.
-- No external database or API integration is required for this feature.
-
 ## Expected Result
 
-Users can filter tasks efficiently using one or multiple criteria while invalid filtering configurations are rejected.
+Users can filter tasks efficiently using one or multiple criteria. The feature provides reusable filtering logic, validates invalid input, and returns only tasks matching the selected criteria.
