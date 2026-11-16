@@ -1,106 +1,57 @@
+"""Reference implementation of LogAnalyzer (Python baseline).
 
-from collections import Counter
+Parses Apache Common/Combined log lines and computes simple statistics.
+This is the specification other language ports must match exactly.
+
+Spec
+----
+parse_line(line) -> dict
+    Input : one Apache log line, e.g.
+            127.0.0.1 - - [10/Oct/2023:13:55:36 +0000] "GET /index.html HTTP/1.1" 200 2326
+    Output: {"ip": str, "method": str, "path": str, "status": int, "bytes": int}
+    Error : raises ValueError if the line is malformed.
+    Note  : bytes is 0 when the log contains "-".
+
+analyze(lines) -> dict
+    Output: {"total_requests": int, "error_rate": float}
+    error_rate = percentage (0-100) of requests with status >= 400,
+    rounded to 2 decimals. Empty input -> total 0, error_rate 0.0.
+    Malformed lines are skipped and not counted.
+"""
+
 import re
+
+_LOG_PATTERN = re.compile(
+    r'^(?P<ip>\S+) \S+ \S+ \[[^\]]+\] '
+    r'"(?P<method>[A-Z]+) (?P<path>\S+)[^"]*" '
+    r'(?P<status>\d{3}) (?P<bytes>\d+|-)'
+)
 
 
 class LogAnalyzer:
-
-    def parse_line(self, line: str) -> dict | None:
-        """Parse one log entry. Return None if the entry is invalid."""
-
-        fields = line.split()
-
-        if len(fields) != 4:
-            return None
-
-        ip_address, method, endpoint, status_text = fields
-
-        # Validate HTTP method
-        if not re.fullmatch(r"[A-Z]+", method):
-            return None
-
-        # Validate endpoint
-        if not endpoint.startswith("/"):
-            return None
-
-        # Validate status code
-        if not status_text.isdigit():
-            return None
-
-        status_code = int(status_text)
-
-        if not 100 <= status_code <= 599:
-            return None
-
+    def parse_line(self, line: str) -> dict:
+        match = _LOG_PATTERN.match(line.strip())
+        if not match:
+            raise ValueError(f"Malformed log line: {line!r}")
+        size = match.group("bytes")
         return {
-            "ip": ip_address,
-            "method": method,
-            "endpoint": endpoint,
-            "status": status_code
+            "ip": match.group("ip"),
+            "method": match.group("method"),
+            "path": match.group("path"),
+            "status": int(match.group("status")),
+            "bytes": 0 if size == "-" else int(size),
         }
 
-    def analyze(self, lines: list[str]) -> dict:
-        """Analyze log entries and return request statistics."""
-
-        valid_entries = []
-
+    def analyze(self, lines: list) -> dict:
+        total = 0
+        errors = 0
         for line in lines:
-            entry = self.parse_line(line)
-
-            if entry is not None:
-                valid_entries.append(entry)
-
-        total_requests = len(valid_entries)
-
-        unique_visitors = len({
-            entry["ip"] for entry in valid_entries
-        })
-
-        successful_requests = sum(
-            1 for entry in valid_entries
-            if 100 <= entry["status"] <= 399
-        )
-
-        failed_requests = sum(
-            1 for entry in valid_entries
-            if 400 <= entry["status"] <= 599
-        )
-
-        error_rate = (
-            round((failed_requests / total_requests) * 100, 2)
-            if total_requests > 0 else 0.0
-        )
-
-        status_counts = Counter(
-            entry["status"] for entry in valid_entries
-        )
-
-        status_codes = {
-            str(code): status_counts[code]
-            for code in sorted(status_counts)
-        }
-
-        endpoint_counts = Counter(
-            entry["endpoint"] for entry in valid_entries
-        )
-
-        top_endpoints = [
-            {
-                "endpoint": endpoint,
-                "count": count
-            }
-            for endpoint, count in sorted(
-                endpoint_counts.items(),
-                key=lambda item: (-item[1], item[0])
-            )
-        ]
-
-        return {
-            "total_requests": total_requests,
-            "unique_visitors": unique_visitors,
-            "successful_requests": successful_requests,
-            "failed_requests": failed_requests,
-            "error_rate": error_rate,
-            "status_codes": status_codes,
-            "top_endpoints": top_endpoints
-        }
+            try:
+                entry = self.parse_line(line)
+            except ValueError:
+                continue
+            total += 1
+            if entry["status"] >= 400:
+                errors += 1
+        error_rate = round(errors / total * 100, 2) if total else 0.0
+        return {"total_requests": total, "error_rate": error_rate}

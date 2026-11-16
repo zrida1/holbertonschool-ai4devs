@@ -1,189 +1,74 @@
-
-import unittest
-
+import os
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import pytest
 
-from log_analyzer import LogAnalyzer
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from log_analyzer import LogAnalyzer  # noqa: E402
 
-
-class TestLogAnalyzer(unittest.TestCase):
-
-    def setUp(self):
-        self.analyzer = LogAnalyzer()
-
-    # Test 1: Normal log entries
-    def test_normal_entries(self):
-        logs = [
-            "192.168.1.10 GET /home 200",
-            "192.168.1.11 POST /login 201",
-            "192.168.1.10 GET /products 404",
-            "192.168.1.12 GET /home 500"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["total_requests"], 4)
-        self.assertEqual(result["unique_visitors"], 3)
-        self.assertEqual(result["successful_requests"], 2)
-        self.assertEqual(result["failed_requests"], 2)
-        self.assertEqual(result["error_rate"], 50.0)
-
-    # Test 2: Empty input
-    def test_empty_input(self):
-        result = self.analyzer.analyze([])
-
-        self.assertEqual(result["total_requests"], 0)
-        self.assertEqual(result["unique_visitors"], 0)
-        self.assertEqual(result["successful_requests"], 0)
-        self.assertEqual(result["failed_requests"], 0)
-        self.assertEqual(result["error_rate"], 0.0)
-        self.assertEqual(result["status_codes"], {})
-        self.assertEqual(result["top_endpoints"], [])
-
-    # Test 3: Duplicate visitors
-    def test_duplicate_visitors(self):
-        logs = [
-            "10.0.0.1 GET /home 200",
-            "10.0.0.1 GET /about 200",
-            "10.0.0.1 POST /login 201",
-            "10.0.0.2 GET /home 200"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["unique_visitors"], 2)
-        self.assertEqual(result["total_requests"], 4)
-
-    # Test 4: Invalid log entries are ignored
-    def test_invalid_entries(self):
-        logs = [
-            "192.168.1.10 GET /home 200",
-            "invalid log entry",
-            "192.168.1.11 POST /login abc",
-            "192.168.1.12 GET home 404",
-            "192.168.1.13 GET /about 600",
-            "192.168.1.14 GET /products 404"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["total_requests"], 2)
-        self.assertEqual(result["unique_visitors"], 2)
-        self.assertEqual(result["failed_requests"], 1)
-        self.assertEqual(result["error_rate"], 50.0)
-
-    # Test 5: Only failed requests
-    def test_only_failed_requests(self):
-        logs = [
-            "192.168.1.10 GET /home 404",
-            "192.168.1.11 POST /login 500",
-            "192.168.1.12 GET /products 403"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["successful_requests"], 0)
-        self.assertEqual(result["failed_requests"], 3)
-        self.assertEqual(result["error_rate"], 100.0)
-
-    # Test 6: Only successful requests
-    def test_only_successful_requests(self):
-        logs = [
-            "192.168.1.10 GET /home 200",
-            "192.168.1.11 POST /login 201",
-            "192.168.1.12 GET /about 302"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["successful_requests"], 3)
-        self.assertEqual(result["failed_requests"], 0)
-        self.assertEqual(result["error_rate"], 0.0)
-
-    # Test 7: Equal endpoint frequencies
-    def test_equal_endpoint_frequencies(self):
-        logs = [
-            "192.168.1.10 GET /products 200",
-            "192.168.1.11 GET /home 200",
-            "192.168.1.12 GET /about 200",
-            "192.168.1.13 GET /home 200",
-            "192.168.1.14 GET /products 200"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(
-            result["top_endpoints"],
-            [
-                {"endpoint": "/home", "count": 2},
-                {"endpoint": "/products", "count": 2},
-                {"endpoint": "/about", "count": 1}
-            ]
-        )
-
-    # Test 8: Invalid status code boundaries
-    def test_invalid_status_codes(self):
-        logs = [
-            "192.168.1.10 GET /home 99",
-            "192.168.1.11 GET /home 600",
-            "192.168.1.12 GET /home 200"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["total_requests"], 1)
-
-    # Test 9: HTTP status code boundaries
-    def test_status_code_boundaries(self):
-        logs = [
-            "192.168.1.10 GET /a 100",
-            "192.168.1.11 GET /b 399",
-            "192.168.1.12 GET /c 400",
-            "192.168.1.13 GET /d 599"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["successful_requests"], 2)
-        self.assertEqual(result["failed_requests"], 2)
-        self.assertEqual(result["error_rate"], 50.0)
-
-    # Test 10: Malformed entries only
-    def test_only_malformed_entries(self):
-        logs = [
-            "invalid",
-            "",
-            "192.168.1.10 GET",
-            "192.168.1.11 GET /home abc"
-        ]
-
-        result = self.analyzer.analyze(logs)
-
-        self.assertEqual(result["total_requests"], 0)
-        self.assertEqual(result["error_rate"], 0.0)
-
-    # Test 11: Parse a valid log entry
-    def test_parse_valid_entry(self):
-        result = self.analyzer.parse_line(
-            "192.168.1.10 GET /home 200"
-        )
-
-        self.assertEqual(result["ip"], "192.168.1.10")
-        self.assertEqual(result["method"], "GET")
-        self.assertEqual(result["endpoint"], "/home")
-        self.assertEqual(result["status"], 200)
-
-    # Test 12: Parse an invalid log entry
-    def test_parse_invalid_entry(self):
-        result = self.analyzer.parse_line(
-            "192.168.1.10 get home abc"
-        )
-
-        self.assertIsNone(result)
+OK = '127.0.0.1 - - [10/Oct/2023:13:55:36 +0000] "GET /index.html HTTP/1.1" 200 2326'
+NOT_FOUND = '10.0.0.5 - - [10/Oct/2023:13:55:37 +0000] "GET /missing HTTP/1.1" 404 512'
+SERVER_ERR = '10.0.0.6 - - [10/Oct/2023:13:55:38 +0000] "POST /api HTTP/1.1" 500 0'
+REDIRECT = '10.0.0.7 - - [10/Oct/2023:13:55:39 +0000] "GET /old HTTP/1.1" 301 -'
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.fixture
+def analyzer():
+    return LogAnalyzer()
+
+
+def test_parse_ok_line(analyzer):
+    assert analyzer.parse_line(OK) == {
+        "ip": "127.0.0.1", "method": "GET", "path": "/index.html",
+        "status": 200, "bytes": 2326,
+    }
+
+
+def test_parse_404(analyzer):
+    assert analyzer.parse_line(NOT_FOUND)["status"] == 404
+
+
+def test_parse_500_post(analyzer):
+    entry = analyzer.parse_line(SERVER_ERR)
+    assert entry["method"] == "POST" and entry["status"] == 500
+
+
+def test_parse_dash_bytes(analyzer):
+    assert analyzer.parse_line(REDIRECT)["bytes"] == 0
+
+
+def test_parse_malformed_raises(analyzer):
+    with pytest.raises(ValueError):
+        analyzer.parse_line("this is not a log line")
+
+
+def test_parse_empty_raises(analyzer):
+    with pytest.raises(ValueError):
+        analyzer.parse_line("")
+
+
+def test_analyze_empty(analyzer):
+    assert analyzer.analyze([]) == {"total_requests": 0, "error_rate": 0.0}
+
+
+def test_analyze_no_errors(analyzer):
+    assert analyzer.analyze([OK, REDIRECT]) == {"total_requests": 2, "error_rate": 0.0}
+
+
+def test_analyze_all_errors(analyzer):
+    assert analyzer.analyze([NOT_FOUND, SERVER_ERR]) == {"total_requests": 2, "error_rate": 100.0}
+
+
+def test_analyze_mixed(analyzer):
+    result = analyzer.analyze([OK, OK, OK, NOT_FOUND])
+    assert result == {"total_requests": 4, "error_rate": 25.0}
+
+
+def test_analyze_rounding(analyzer):
+    result = analyzer.analyze([OK, OK, NOT_FOUND])
+    assert result["error_rate"] == 33.33
+
+
+def test_analyze_skips_malformed(analyzer):
+    result = analyzer.analyze([OK, "garbage", NOT_FOUND])
+    assert result == {"total_requests": 2, "error_rate": 50.0}
